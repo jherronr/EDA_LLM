@@ -2,5 +2,5 @@ streamlit
 pandas
 matplotlib
 seaborn
-numpy
-scipy
+huggingface_hub
+langchain_huggingface
