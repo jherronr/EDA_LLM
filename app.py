@@ -1,3 +1,4 @@
+
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -159,7 +160,7 @@ if st.session_state.df is not None:
                     llm_chain = LLMChain(prompt=prompt_template, llm=llm)
                     
                     # Llamada al modelo con el prompt completo
-                    response = llm_chain.run(context=system_prompt, user_question=prompt)
+                    response = llm_chain.invoke({"context": system_prompt, "user_question": prompt})['text']
                     
                     st.markdown(response)
                     
@@ -185,3 +186,4 @@ if st.session_state.df is not None:
             except Exception as e:
                 st.error(f"Ocurrió un error al llamar al modelo LLM: {e}")
                 st.warning("Asegúrate de que la clave de API es válida y el modelo está disponible.")
+
