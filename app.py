@@ -12,7 +12,7 @@ from langchain.chains import LLMChain
 
 # Configuración visual de los gráficos
 sns.set(style="whitegrid")
-plt.rcParams["figure.figsize"] = (20, 20)
+plt.rcParams["figure.figsize"] = (10, 6)
 
 # Configurar el título y la descripción de la aplicación
 st.title('📊 Herramienta de Análisis de Datos y Asistente LLM')
