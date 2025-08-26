@@ -3,4 +3,4 @@ pandas
 matplotlib
 seaborn
 huggingface_hub
-langchain_huggingface
+langchain-huggingface
