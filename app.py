@@ -5,14 +5,14 @@ import seaborn as sns
 import io
 import os
 
-# Importar las clases necesarias de LangChain
-from langchain_huggingface import HuggingFaceHub
+# Importar las clases necesarias de LangChain desde la ubicación correcta
+from langchain_community.llms import HuggingFaceHub
 from langchain.prompts import PromptTemplate
 from langchain.chains import LLMChain
 
 # Configuración visual de los gráficos
 sns.set(style="whitegrid")
-plt.rcParams["figure.figsize"] = (10, 6)
+plt.rcParams["figure.figsize"] = (20, 20)
 
 # Configurar el título y la descripción de la aplicación
 st.title('📊 Herramienta de Análisis de Datos y Asistente LLM')
