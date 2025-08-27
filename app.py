@@ -1,4 +1,3 @@
-
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -17,15 +16,12 @@ plt.rcParams["figure.figsize"] = (10, 6)
 st.title('📊 Herramienta de Análisis de Datos y Asistente LLM')
 st.write('Sube un archivo CSV para generar un análisis completo y chatear con un LLM sobre tus datos.')
 
-# Inicializar el historial del chat, el DataFrame y la conclusión en la sesión
+# Inicializar el historial del chat y el DataFrame en la sesión
 if "messages" not in st.session_state:
     st.session_state.messages = []
     
 if "df" not in st.session_state:
     st.session_state.df = None
-
-if "initial_conclusion" not in st.session_state:
-    st.session_state.initial_conclusion = None
 
 # Aceptar la entrada del archivo por el usuario
 uploaded_file = st.file_uploader("Elige un archivo CSV", type="csv")
@@ -95,55 +91,11 @@ if uploaded_file is not None and st.session_state.df is None:
             ax.set_title('Matriz de Correlación entre Variables Numéricas')
             st.pyplot(fig)
             
-        # ----------------------------------------------------
-        # Parte 3: Generar Conclusión Inicial del LLM
-        # ----------------------------------------------------
-        # Obtener la clave de API de las variables de entorno o de los "secrets" de Streamlit Cloud
-        if "GROQ_API_KEY" in os.environ:
-            with st.spinner('Generando conclusión inicial sobre el dataset...'):
-                df_string = df.to_string(index=False)
-                system_prompt_initial = (
-                    "Eres un analista de datos experto. Tienes un dataset en formato de texto a continuación. "
-                    "Analiza el dataset, extrae los insights más relevantes y proporciona una conclusión concisa y directa. "
-                    "No incluyas nada más en tu respuesta. "
-                    "Dataset:\n"
-                    "```\n"
-                    f"{df_string}\n"
-                    "```"
-                )
-                
-                llm = ChatGroq(
-                    temperature=0,
-                    groq_api_key=os.environ["GROQ_API_KEY"],
-                    model_name="gemma2-9b-it"
-                )
-                
-                initial_prompt_template = ChatPromptTemplate.from_messages(
-                    [("system", system_prompt_initial)]
-                )
-                
-                initial_llm_chain = LLMChain(prompt=initial_prompt_template, llm=llm)
-                
-                try:
-                    st.session_state.initial_conclusion = initial_llm_chain.invoke({})['text']
-                except Exception as e:
-                    st.session_state.initial_conclusion = f"Error al generar la conclusión: {e}. Por favor, verifica tu clave de API de Groq."
-        else:
-            st.session_state.initial_conclusion = "No se pudo generar la conclusión. Por favor, configura tu clave de API de Groq en los 'secrets' de Streamlit Cloud."
-
     except Exception as e:
         st.error(f"Ocurrió un error al procesar el archivo: {e}")
         st.stop()
         
 if st.session_state.df is not None:
-    # ----------------------------------------------------
-    # Sección de Conclusión
-    # ----------------------------------------------------
-    st.markdown("---")
-    st.header('💡 Conclusión del Análisis de Datos')
-    if st.session_state.initial_conclusion:
-        st.info(st.session_state.initial_conclusion)
-
     # ----------------------------------------------------
     # Sección de Chat Interactivo
     # ----------------------------------------------------
@@ -216,4 +168,3 @@ if st.session_state.df is not None:
             except Exception as e:
                 st.error(f"Ocurrió un error al llamar al modelo LLM: {e}")
                 st.warning("Asegúrate de que la clave de API es válida y el modelo está disponible.")
-
