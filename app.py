@@ -5,8 +5,6 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import io
 import os
-
-# Importar las clases necesarias de LangChain desde la ubicación correcta
 from langchain_groq import ChatGroq
 from langchain.prompts import PromptTemplate, ChatPromptTemplate
 from langchain.chains import LLMChain
@@ -19,17 +17,20 @@ plt.rcParams["figure.figsize"] = (10, 6)
 st.title('📊 Herramienta de Análisis de Datos y Asistente LLM')
 st.write('Sube un archivo CSV para generar un análisis completo y chatear con un LLM sobre tus datos.')
 
-# Inicializar el historial del chat en la sesión
+# Inicializar el historial del chat, el DataFrame y la conclusión en la sesión
 if "messages" not in st.session_state:
     st.session_state.messages = []
     
 if "df" not in st.session_state:
     st.session_state.df = None
 
+if "initial_conclusion" not in st.session_state:
+    st.session_state.initial_conclusion = None
+
 # Aceptar la entrada del archivo por el usuario
 uploaded_file = st.file_uploader("Elige un archivo CSV", type="csv")
 
-if uploaded_file is not None:
+if uploaded_file is not None and st.session_state.df is None:
     try:
         df = pd.read_csv(uploaded_file)
         st.session_state.df = df
@@ -94,17 +95,56 @@ if uploaded_file is not None:
             ax.set_title('Matriz de Correlación entre Variables Numéricas')
             st.pyplot(fig)
             
+        # ----------------------------------------------------
+        # Parte 3: Generar Conclusión Inicial del LLM
+        # ----------------------------------------------------
+        # Obtener la clave de API de las variables de entorno o de los "secrets" de Streamlit Cloud
+        if "GROQ_API_KEY" in os.environ:
+            with st.spinner('Generando conclusión inicial sobre el dataset...'):
+                df_string = df.to_string(index=False)
+                system_prompt_initial = (
+                    "Eres un analista de datos experto. Tienes un dataset en formato de texto a continuación. "
+                    "Analiza el dataset, extrae los insights más relevantes y proporciona una conclusión concisa y directa. "
+                    "No incluyas nada más en tu respuesta. "
+                    "Dataset:\n"
+                    "```\n"
+                    f"{df_string}\n"
+                    "```"
+                )
+                
+                llm = ChatGroq(
+                    temperature=0,
+                    groq_api_key=os.environ["GROQ_API_KEY"],
+                    model_name="mixtral-8x7b-32768"
+                )
+                
+                initial_prompt_template = ChatPromptTemplate.from_messages(
+                    [("system", system_prompt_initial)]
+                )
+                
+                initial_llm_chain = LLMChain(prompt=initial_prompt_template, llm=llm)
+                
+                st.session_state.initial_conclusion = initial_llm_chain.invoke({})['text']
+        else:
+            st.session_state.initial_conclusion = "No se pudo generar la conclusión. Por favor, configura tu clave de API de Groq en los 'secrets' de Streamlit Cloud."
+
     except Exception as e:
         st.error(f"Ocurrió un error al procesar el archivo: {e}")
         st.stop()
-
-
-# ----------------------------------------------------
-# Parte 3: Integración del LLM
-# ----------------------------------------------------
+        
 if st.session_state.df is not None:
-    df = st.session_state.df
+    # ----------------------------------------------------
+    # Sección de Conclusión
+    # ----------------------------------------------------
+    st.markdown("---")
+    st.header('💡 Conclusión del Análisis de Datos')
+    if st.session_state.initial_conclusion:
+        st.info(st.session_state.initial_conclusion)
 
+    # ----------------------------------------------------
+    # Sección de Chat Interactivo
+    # ----------------------------------------------------
+    st.markdown("---")
     st.header('🤖 Asistente LLM sobre tus Datos')
     st.write('Pregunta lo que quieras sobre el análisis de datos que acabas de ver.')
     
@@ -113,27 +153,19 @@ if st.session_state.df is not None:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
 
-    # Capturar los insights del EDA dinámicamente
-    file_name = uploaded_file.name
-    num_rows, num_cols = df.shape
-    columns_info = df.dtypes.to_dict()
-    descriptive_stats_str = df.describe().T.to_string()
-    missing_data_info = df.isnull().sum().to_dict()
-    categorical_info = {col: df[col].nunique() for col in df.select_dtypes(include='object').columns}
-
-    # Crear el prompt del sistema con los insights
-    system_prompt = (
-        "Eres un analista de datos experto. Tienes acceso a un dataset con las siguientes características:\n"
-        f"- Nombre del archivo: {file_name}\n"
-        f"- Dimensiones: {num_rows} filas, {num_cols} columnas\n"
-        f"- Columnas y Tipos: {columns_info}\n"
-        f"- Estadísticas Descriptivas:\n{descriptive_stats_str}\n"
-        f"- Valores Nulos: {missing_data_info}\n"
-        f"- Cardinalidad Categórica: {categorical_info}\n\n"
-        "Tu tarea es responder preguntas de los usuarios sobre este dataset, usando la información proporcionada. "
-        "Sé conciso y ve al punto. No inventes información."
-    )
+    df_string = st.session_state.df.to_string(index=False)
     
+    # Crear el prompt del sistema para las preguntas interactivas
+    system_prompt_qa = (
+        "Eres un analista de datos experto. Tienes un dataset en formato de texto a continuación. "
+        "Analiza el dataset y responde a las preguntas del usuario. "
+        "Sé conciso y ve al punto. No inventes información. "
+        "Dataset:\n"
+        "```\n"
+        f"{df_string}\n"
+        "```"
+    )
+
     # Aceptar la entrada del usuario
     if prompt := st.chat_input("Pregunta sobre tu dataset..."):
         # Añadir el mensaje del usuario al historial
@@ -142,9 +174,7 @@ if st.session_state.df is not None:
             st.markdown(prompt)
 
         with st.chat_message("assistant"):
-            # Aquí se configura y llama al modelo de Groq
             try:
-                # Se obtiene la clave de API de las variables de entorno o de los "secrets" de Streamlit Cloud
                 if "GROQ_API_KEY" in os.environ:
                     llm = ChatGroq(
                         temperature=0,
@@ -152,20 +182,16 @@ if st.session_state.df is not None:
                         model_name="mixtral-8x7b-32768"
                     )
                     
-                    # Se crea la cadena con el prompt y el LLM
-                    prompt_template = ChatPromptTemplate.from_messages(
-                        [("system", system_prompt), ("human", "{user_question}")]
+                    prompt_template_qa = ChatPromptTemplate.from_messages(
+                        [("system", system_prompt_qa), ("human", "{user_question}")]
                     )
                     
-                    llm_chain = LLMChain(prompt=prompt_template, llm=llm)
+                    llm_chain = LLMChain(prompt=prompt_template_qa, llm=llm)
                     
-                    # Llamada al modelo con el prompt completo
-                    # La corrección está en cómo se pasan las variables al .invoke()
                     response = llm_chain.invoke({"user_question": prompt})['text']
                     
                     st.markdown(response)
                     
-                    # Añadir la respuesta del asistente al historial
                     st.session_state.messages.append({"role": "assistant", "content": response})
 
                 else:
@@ -173,11 +199,11 @@ if st.session_state.df is not None:
                     st.info("Para que el LLM funcione, debes configurar tu clave de API en los 'secrets' de Streamlit Cloud con el nombre 'GROQ_API_KEY'.")
                     st.warning("Respuesta simulada del LLM para demostración.")
                     
-                    # Simular la respuesta del LLM para la demostración
                     if "promedio" in prompt.lower():
-                        response = f"El monto promedio de las transacciones es de ${df['Amount'].mean():.2f}."
-                    elif "categoría" in prompt.lower():
-                        response = f"La categoría de gasto más común es '{df['Category'].value_counts().idxmax()}'."
+                        if "Amount" in st.session_state.df.columns:
+                            response = f"El monto promedio de las transacciones es de ${st.session_state.df['Amount'].mean():.2f}."
+                        else:
+                            response = "No se encontró la columna 'Amount'."
                     else:
                         response = "No puedo responder a esa pregunta con los datos disponibles."
                     
@@ -187,5 +213,3 @@ if st.session_state.df is not None:
             except Exception as e:
                 st.error(f"Ocurrió un error al llamar al modelo LLM: {e}")
                 st.warning("Asegúrate de que la clave de API es válida y el modelo está disponible.")
-
-
