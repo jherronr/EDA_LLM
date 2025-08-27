@@ -179,7 +179,7 @@ if st.session_state.df is not None:
                     llm = ChatGroq(
                         temperature=0,
                         groq_api_key=os.environ["GROQ_API_KEY"],
-                        model_name="gemma2-9b-it"
+                        model_name="mixtral-8x7b-32768"
                     )
                     
                     prompt_template_qa = ChatPromptTemplate.from_messages(
