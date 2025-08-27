@@ -115,7 +115,7 @@ if uploaded_file is not None and st.session_state.df is None:
                 llm = ChatGroq(
                     temperature=0,
                     groq_api_key=os.environ["GROQ_API_KEY"],
-                    model_name="mixtral-8x7b-32768"
+                    model_name="gemma2-9b-it"
                 )
                 
                 initial_prompt_template = ChatPromptTemplate.from_messages(
