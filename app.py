@@ -7,8 +7,8 @@ import io
 import os
 
 # Importar las clases necesarias de LangChain desde la ubicación correcta
-from langchain_community.llms import HuggingFaceHub
-from langchain.prompts import PromptTemplate
+from langchain_groq import ChatGroq
+from langchain.prompts import PromptTemplate, ChatPromptTemplate
 from langchain.chains import LLMChain
 
 # Configuración visual de los gráficos
@@ -142,25 +142,25 @@ if st.session_state.df is not None:
             st.markdown(prompt)
 
         with st.chat_message("assistant"):
-            # Aquí se configura y llama al modelo de Hugging Face
+            # Aquí se configura y llama al modelo de Groq
             try:
                 # Se obtiene la clave de API de las variables de entorno o de los "secrets" de Streamlit Cloud
-                if "HUGGING_FACE_HUB_TOKEN" in os.environ:
-                    llm = HuggingFaceHub(
-                        repo_id="google/gemma-2b-it",
-                        huggingfacehub_api_token=os.environ["HUGGING_FACE_HUB_TOKEN"]
+                if "GROQ_API_KEY" in os.environ:
+                    llm = ChatGroq(
+                        temperature=0,
+                        groq_api_key=os.environ["GROQ_API_KEY"],
+                        model_name="mixtral-8x7b-32768"
                     )
                     
                     # Se crea la cadena con el prompt y el LLM
-                    prompt_template = PromptTemplate(
-                        input_variables=["context", "user_question"],
-                        template=system_prompt + "\n\nPregunta: {user_question}"
+                    prompt_template = ChatPromptTemplate.from_messages(
+                        [("system", system_prompt), ("human", "{user_question}")]
                     )
                     
                     llm_chain = LLMChain(prompt=prompt_template, llm=llm)
                     
                     # Llamada al modelo con el prompt completo
-                    response = llm_chain.invoke({"context": system_prompt, "user_question": prompt})['text']
+                    response = llm_chain.invoke({"user_question": prompt})['text']
                     
                     st.markdown(response)
                     
@@ -168,8 +168,8 @@ if st.session_state.df is not None:
                     st.session_state.messages.append({"role": "assistant", "content": response})
 
                 else:
-                    st.warning("¡Advertencia! La clave de API de Hugging Face no está configurada.")
-                    st.info("Para que el LLM funcione, debes configurar tu clave de API en los 'secrets' de Streamlit Cloud con el nombre 'HUGGING_FACE_HUB_TOKEN'.")
+                    st.warning("¡Advertencia! La clave de API de Groq no está configurada.")
+                    st.info("Para que el LLM funcione, debes configurar tu clave de API en los 'secrets' de Streamlit Cloud con el nombre 'GROQ_API_KEY'.")
                     st.warning("Respuesta simulada del LLM para demostración.")
                     
                     # Simular la respuesta del LLM para la demostración
