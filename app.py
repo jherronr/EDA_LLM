@@ -124,7 +124,10 @@ if uploaded_file is not None and st.session_state.df is None:
                 
                 initial_llm_chain = LLMChain(prompt=initial_prompt_template, llm=llm)
                 
-                st.session_state.initial_conclusion = initial_llm_chain.invoke({})['text']
+                try:
+                    st.session_state.initial_conclusion = initial_llm_chain.invoke({})['text']
+                except Exception as e:
+                    st.session_state.initial_conclusion = f"Error al generar la conclusión: {e}. Por favor, verifica tu clave de API de Groq."
         else:
             st.session_state.initial_conclusion = "No se pudo generar la conclusión. Por favor, configura tu clave de API de Groq en los 'secrets' de Streamlit Cloud."
 
@@ -213,3 +216,4 @@ if st.session_state.df is not None:
             except Exception as e:
                 st.error(f"Ocurrió un error al llamar al modelo LLM: {e}")
                 st.warning("Asegúrate de que la clave de API es válida y el modelo está disponible.")
+
