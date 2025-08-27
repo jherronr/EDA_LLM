@@ -160,6 +160,7 @@ if st.session_state.df is not None:
                     llm_chain = LLMChain(prompt=prompt_template, llm=llm)
                     
                     # Llamada al modelo con el prompt completo
+                    # La corrección está en cómo se pasan las variables al .invoke()
                     response = llm_chain.invoke({"user_question": prompt})['text']
                     
                     st.markdown(response)
@@ -186,4 +187,5 @@ if st.session_state.df is not None:
             except Exception as e:
                 st.error(f"Ocurrió un error al llamar al modelo LLM: {e}")
                 st.warning("Asegúrate de que la clave de API es válida y el modelo está disponible.")
+
 
