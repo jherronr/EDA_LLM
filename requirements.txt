@@ -2,5 +2,5 @@ streamlit
 pandas
 matplotlib
 seaborn
-groq
-langchain_groq
+langchain
+langchain-groq
