@@ -218,8 +218,8 @@ if st.session_state.df is not None:
                 with st.spinner("Pensando..."):
                     try:
                         if "GROQ_API_KEY" not in os.environ or not os.environ["GROQ_API_KEY"]:
-                             st.warning("La clave de API de Groq no está configurada.")
-                             continue
+                            st.warning("La clave de API de Groq no está configurada.")
+                            continue
 
                         llm = ChatGroq(temperature=0, model_name="gemma2-9b-it")
                         
