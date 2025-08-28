@@ -1,4 +1,3 @@
-
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -7,7 +6,7 @@ import io
 import os
 from langchain_groq import ChatGroq
 from langchain.prompts import ChatPromptTemplate
-from langchain.chains import LLMChain
+from langchain_core.output_parsers import StrOutputParser
 
 # --- CONFIGURACIÓN DE LA PÁGINA Y ESTILOS ---
 st.set_page_config(page_title="Análisis de Datos con LLM", layout="wide", initial_sidebar_state="collapsed")
@@ -19,7 +18,6 @@ st.title('📊 Herramienta de Análisis de Datos y Asistente LLM')
 st.write('Sube un archivo CSV para generar un análisis exploratorio completo y obtener una conclusión generada por un LLM.')
 
 # --- INICIALIZACIÓN DEL ESTADO DE LA SESIÓN ---
-# Esto es crucial para mantener los datos y mensajes entre interacciones.
 if "messages" not in st.session_state:
     st.session_state.messages = []
 if "df" not in st.session_state:
@@ -81,6 +79,7 @@ def get_llm_conclusion(eda_summary: str) -> str:
         if "GROQ_API_KEY" not in os.environ or not os.environ["GROQ_API_KEY"]:
             return "⚠️ **Advertencia:** La clave de API de Groq no está configurada. No se puede generar la conclusión."
 
+        # Usamos un modelo rápido para la conclusión inicial
         llm = ChatGroq(
             temperature=0.1,
             groq_api_key=os.environ["GROQ_API_KEY"],
@@ -106,8 +105,9 @@ def get_llm_conclusion(eda_summary: str) -> str:
             ("human", human_prompt)
         ])
         
-        llm_chain = LLMChain(prompt=prompt_template, llm=llm)
-        response = llm_chain.invoke({"eda_summary": eda_summary})['text']
+        output_parser = StrOutputParser()
+        chain = prompt_template | llm | output_parser
+        response = chain.invoke({"eda_summary": eda_summary})
         return response
 
     except Exception as e:
@@ -122,36 +122,30 @@ if uploaded_file is not None and st.session_state.df is None:
         st.session_state.df = df
         st.success("✅ Archivo cargado exitosamente. Generando análisis...")
         
-        # Generar y guardar el resumen del EDA y la conclusión del LLM una sola vez.
         st.session_state.eda_summary = generate_eda_summary(df)
         with st.spinner('🤖 El asistente LLM está analizando los datos para generar una conclusión...'):
             st.session_state.llm_conclusion = get_llm_conclusion(st.session_state.eda_summary)
 
     except Exception as e:
         st.error(f"Ocurrió un error al procesar el archivo: {e}")
-        st.session_state.df = None # Resetear en caso de error
+        st.session_state.df = None
 
-# --- VISUALIZACIÓN DEL ANÁLISIS (si el df existe) ---
+# --- VISUALIZACIÓN DEL ANÁLISIS ---
 if st.session_state.df is not None:
     df = st.session_state.df
     
-    # --- Pestañas para organizar el contenido ---
     tab1, tab2, tab3 = st.tabs(["📄 Resumen y Estadísticas", "📈 Visualizaciones", "🤖 Conclusión y Chat"])
 
     with tab1:
         st.header('🔍 Resumen de los Datos')
-        
         st.subheader('Información General de las Columnas')
         buffer = io.StringIO()
         df.info(buf=buffer)
         st.text(buffer.getvalue())
-        
         st.subheader('Primeras 5 Filas')
         st.dataframe(df.head())
-        
         st.subheader('Estadísticas Descriptivas')
         st.dataframe(df.describe().T)
-        
         st.subheader('Valores Nulos y Duplicados')
         col1, col2 = st.columns(2)
         with col1:
@@ -163,10 +157,8 @@ if st.session_state.df is not None:
 
     with tab2:
         st.header('📈 Visualizaciones del EDA')
-        
         numeric_cols = df.select_dtypes(include=['int64', 'float64']).columns
         cat_cols = df.select_dtypes(include='object').columns
-        
         if not numeric_cols.empty:
             st.subheader('Distribución de Variables Numéricas')
             for col in numeric_cols:
@@ -176,7 +168,6 @@ if st.session_state.df is not None:
                 sns.boxplot(x=df[col], ax=ax[1])
                 ax[1].set_title(f'Boxplot de {col}')
                 st.pyplot(fig)
-
         if not cat_cols.empty:
             st.subheader('Distribución de Variables Categóricas')
             for col in cat_cols:
@@ -184,7 +175,6 @@ if st.session_state.df is not None:
                 sns.countplot(y=df[col], order=df[col].value_counts().index, ax=ax)
                 ax.set_title(f'Conteo de {col}')
                 st.pyplot(fig)
-        
         if len(numeric_cols) > 1:
             st.subheader('Matriz de Correlación')
             fig, ax = plt.subplots()
@@ -204,12 +194,10 @@ if st.session_state.df is not None:
         st.header('💬 Chatea sobre tus Datos')
         st.write('Haz preguntas específicas sobre el análisis o los datos.')
 
-        # Mostrar mensajes del chat
         for message in st.session_state.messages:
             with st.chat_message(message["role"]):
                 st.markdown(message["content"])
 
-        # Input del usuario para el chat
         if prompt := st.chat_input("Ej: ¿Cuál es la correlación entre la columna A y B?"):
             st.session_state.messages.append({"role": "user", "content": prompt})
             with st.chat_message("user"):
@@ -218,16 +206,20 @@ if st.session_state.df is not None:
             with st.chat_message("assistant"):
                 with st.spinner("Pensando..."):
                     try:
-                        # --- CÓDIGO CORREGIDO ---
-                        # Comprueba si la clave API existe ANTES de intentar usarla.
                         if "GROQ_API_KEY" in os.environ and os.environ["GROQ_API_KEY"]:
-                            llm = ChatGroq(temperature=0, model_name="gemma2-9b-it")
+                            # Usamos un modelo más potente para el chat interactivo
+                            llm_qa = ChatGroq(temperature=0, model_name="llama3-70b-8192")
                             
                             system_prompt_qa = (
-                                "Eres un asistente de análisis de datos. Se te ha proporcionado un resumen del EDA y el dataset completo. "
-                                "Tu tarea es responder preguntas específicas del usuario sobre los datos. "
-                                "Utiliza la información del resumen y del dataset para formular tus respuestas. "
-                                "Sé directo y conciso. No intentes generar gráficos ni código.\n\n"
+                                "Eres un asistente de análisis de datos. Tu tarea es responder preguntas del usuario sobre un dataset. "
+                                "Se te ha proporcionado un resumen del análisis exploratorio (EDA) y las primeras 100 filas del dataset. "
+                                "**Reglas estrictas:**\n"
+                                "1. Basa tus respuestas ÚNICAMENTE en la información proporcionada (resumen del EDA y los datos).\n"
+                                "2. Responde de forma directa y concisa a la pregunta del usuario.\n"
+                                "3. **NUNCA** repitas los datos del dataset en tu respuesta. En lugar de mostrar los datos, describe los hallazgos o calcula lo que se te pide (ej. 'El valor promedio es X', 'La correlación es Y').\n"
+                                "4. No generes código ni gráficos.\n\n"
+                                "5. Solo responde preguntas relacionadas con los datos y la base de datos."
+                                "6. Indica al usuario que solo puedes ver las 100 primeras filas del dataset antes de generar una respuesta."
                                 f"--- RESUMEN DEL EDA ---\n{st.session_state.eda_summary}\n\n"
                                 f"--- DATASET (primeras 100 filas) ---\n{df.head(100).to_string()}\n---"
                             )
@@ -237,14 +229,16 @@ if st.session_state.df is not None:
                                 ("human", "{user_question}")
                             ])
                             
-                            llm_chain = LLMChain(prompt=prompt_template_qa, llm=llm)
-                            response = llm_chain.invoke({"user_question": prompt})['text']
+                            output_parser = StrOutputParser()
+                            chain = prompt_template_qa | llm_qa | output_parser
+                            
+                            response = chain.invoke({"user_question": prompt})
                             st.markdown(response)
                             st.session_state.messages.append({"role": "assistant", "content": response})
                         else:
-                            # Si la clave no existe, muestra una advertencia.
                             st.warning("La clave de API de Groq no está configurada.")
 
                     except Exception as e:
                         st.error(f"Ocurrió un error al llamar al LLM: {e}")
+
 
