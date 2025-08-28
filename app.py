@@ -1,3 +1,4 @@
+
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -95,7 +96,7 @@ def get_llm_conclusion(eda_summary: str) -> str:
             "2.  **Principales Hallazgos:** Describe las tendencias, patrones o distribuciones más importantes que observas en las estadísticas.\n"
             "3.  **Correlaciones Relevantes:** Si hay una matriz de correlación, menciona las correlaciones fuertes (positivas o negativas) y lo que podrían significar.\n"
             "4.  **Recomendaciones:** Basado en el análisis, sugiere los siguientes pasos o áreas de interés para una investigación más profunda.\n\n"
-            "**IMPORTANTE:** Basa tu conclusión ÚNICAMENTE en el resumen del EDA proporcionado o la base de datos entregada por el usuario. No inventes información. No generes código. No respondas temas que no estén directamente relacionados con la base de datos entregada."
+            "**IMPORTANTE:** Basa tu conclusión ÚNICAMENTE en el resumen del EDA proporcionado. No inventes información. No generes código."
         )
         
         human_prompt = "Aquí está el resumen del EDA:\n\n---\n\n{eda_summary}\n\n---\n\nPor favor, genera la conclusión."
@@ -217,31 +218,32 @@ if st.session_state.df is not None:
             with st.chat_message("assistant"):
                 with st.spinner("Pensando..."):
                     try:
-                        if "GROQ_API_KEY" not in os.environ or not os.environ["GROQ_API_KEY"]:
+                        # --- CÓDIGO CORREGIDO ---
+                        # Comprueba si la clave API existe ANTES de intentar usarla.
+                        if "GROQ_API_KEY" in os.environ and os.environ["GROQ_API_KEY"]:
+                            llm = ChatGroq(temperature=0, model_name="gemma2-9b-it")
+                            
+                            system_prompt_qa = (
+                                "Eres un asistente de análisis de datos. Se te ha proporcionado un resumen del EDA y el dataset completo. "
+                                "Tu tarea es responder preguntas específicas del usuario sobre los datos. "
+                                "Utiliza la información del resumen y del dataset para formular tus respuestas. "
+                                "Sé directo y conciso. No intentes generar gráficos ni código.\n\n"
+                                f"--- RESUMEN DEL EDA ---\n{st.session_state.eda_summary}\n\n"
+                                f"--- DATASET (primeras 100 filas) ---\n{df.head(100).to_string()}\n---"
+                            )
+                            
+                            prompt_template_qa = ChatPromptTemplate.from_messages([
+                                ("system", system_prompt_qa),
+                                ("human", "{user_question}")
+                            ])
+                            
+                            llm_chain = LLMChain(prompt=prompt_template_qa, llm=llm)
+                            response = llm_chain.invoke({"user_question": prompt})['text']
+                            st.markdown(response)
+                            st.session_state.messages.append({"role": "assistant", "content": response})
+                        else:
+                            # Si la clave no existe, muestra una advertencia.
                             st.warning("La clave de API de Groq no está configurada.")
-                            continue
-
-                        llm = ChatGroq(temperature=0, model_name="gemma2-9b-it")
-                        
-                        system_prompt_qa = (
-                            "Eres un asistente de análisis de datos. Se te ha proporcionado un resumen del EDA y el dataset completo. "
-                            "Tu tarea es responder preguntas específicas del usuario sobre los datos. "
-                            "Utiliza la información del resumen y del dataset para formular tus respuestas. "
-                            "No respondas preguntas que estén por fuera de la base de datos o que no sean del tema de la base de datos"
-                            "Sé directo y conciso. No intentes generar gráficos ni código.\n\n"
-                            f"--- RESUMEN DEL EDA ---\n{st.session_state.eda_summary}\n\n"
-                            f"--- DATASET (primeras 100 filas) ---\n{df.to_string()}\n---"
-                        )
-                        
-                        prompt_template_qa = ChatPromptTemplate.from_messages([
-                            ("system", system_prompt_qa),
-                            ("human", "{user_question}")
-                        ])
-                        
-                        llm_chain = LLMChain(prompt=prompt_template_qa, llm=llm)
-                        response = llm_chain.invoke({"user_question": prompt})['text']
-                        st.markdown(response)
-                        st.session_state.messages.append({"role": "assistant", "content": response})
 
                     except Exception as e:
                         st.error(f"Ocurrió un error al llamar al LLM: {e}")
